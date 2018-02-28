@@ -28,15 +28,14 @@ class recommender:
         
         # Check if there is a save of the model and if yes, load it. If not, train it now
         try:
-            _, self.algo = surprise.dump.load(self.model_path)
+            _, self.algorithm = surprise.dump.load(self.model_path)
         except:
             logging.error(('File "model.pickle" was not found in %s.\n If you have already '
                            'trained the Recommender, make sure the file is in the correct directory'), self.model_path)
             train_flag = self.input_y_n('Would you like to train the Recommender again (y/n)? ')
             if train_flag in self.pos:
                 self.model_fit()
-            else:
-                sys.exit(1)
+
                 
     
     def input_y_n(self, message, message_loop='', additional=[]):
@@ -71,7 +70,7 @@ class recommender:
         while keep_on_mm:
             print('What would you like to do?\n Choose a number to...\n','1:Rate Books   2:Get Recommendations   3:Logout   4:Quit')
             mm_input = input(':')
-            while mm_input not in ['1','2','3','4']:
+            while mm_input not in ['1','2','3','4','#']:
                 mm_input = input('Choose a number between 1 and 4 to Rate Books, Get Recommendation, Logout or Quit')
             if mm_input == '1':
                 self.new_ratings()
@@ -80,11 +79,16 @@ class recommender:
             elif mm_input == '3':
                 self.user_logout()
                 print('You have logged out Successfully')
-            else:
+            elif mm_input == '4':
                 self.save_dfs('all')
                 self.save_model(verbose=False)
                 keep_on_mm = False
                 print('We hope you enjoyed the experience and to see you again soon...Bye...')
+            else:
+                print('You have entered Advanced Settings')
+                a_ch = input('')
+                if a_ch in ['SVD','Baseline','SlopeOne','KNNBasic']:
+                    self._algo_choise = a_ch
             
     
     def user_login(self):
@@ -249,9 +253,19 @@ class recommender:
         Train model using surprise.SVD algorithm. 
         '''
         self.build_trainset()
-        print('Training Recommender System using SVD...')
-        self.algo = surprise.SVD()
-        self.algo.fit(self.trainset)
+        algo = self._algo_choise
+        if algo == 'SVD':
+            self.algorithm = surprise.SVD()
+        elif algo == 'Baseline':
+            self.algorithm = surprise.BaselineOnly()
+        elif algo == 'SlopeOne':
+            self.algorithm = surprise.SlopeOne()
+        else:
+            self.algorithm = surprise.KNNBasic()
+        
+        print('Training Recommender System using %s...' %algo)
+        
+        self.algorithm.fit(self.trainset)
         self.ratings_changed=False
         print('Done')
         
@@ -266,7 +280,7 @@ class recommender:
         if verbose:
             print('Saving Model...')
         verbose=1*verbose
-        surprise.dump.dump(self.model_path, predictions=None, algo=self.algo, verbose=verbose)
+        surprise.dump.dump(self.model_path, predictions=None, algo=self.algorithm, verbose=verbose)
         
         
     def build_trainset(self):
@@ -347,7 +361,11 @@ class recommender:
         except:
             self.build_trainset()
             recset = self.build_recset(self.trainset)
-        predictions = self.algo.test(recset)
+        try:
+            predictions = self.algorithm.test(recset)
+        except:
+            self.model_fit()
+            predictions = self.algorithm.test(recset)
         
         # get the books with the top predicted rating and construct a pd.DataFrame of them and the ratings
         top_n = []
@@ -410,3 +428,8 @@ class recommender:
                            '"BookCrossing data cleansing.ipynb" first.'), self.dfs_path)
             sys.exit(1)
         return users_df, items_df, ratings_df
+    
+    
+if __name__=='__main__':
+    rec = recommender()
+    rec.main_menu()
